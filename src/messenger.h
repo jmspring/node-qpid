@@ -54,7 +54,29 @@ class Messenger : public node::ObjectWrap {
       Baton(msgr_, cb_), address(address_) {}
 
   };
+  
+  struct AddSourceFilterBaton : Baton {
 
+    std::string address;
+    std::string filter_key;
+    pn_type_t filter_type;
+    pn_data_t *filter_value;
+
+    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, const char *filter_key_, pn_type_t filter_type_, pn_data_t *filter_value_) :
+      Baton(msgr_, cb_), address(address_), filter_key(filter_key_), filter_type(filter_type_), filter_value(filter_value_) {}
+
+  };
+/*
+  struct RemoveSourceFilterBaton : Baton {
+
+    std::string address;
+    std::string filter_key;
+
+    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, const char *filter_key_, pn_type_t filter_type_, void *filter_value_) :
+      Baton(msgr_, cb_), address(address_), filter_key(filter_key_) {}
+
+  };
+*/
   struct SendBaton : Baton {
 
     pn_message_t * msg;
@@ -113,6 +135,8 @@ class Messenger : public node::ObjectWrap {
 
   WORK_DEFINITION(Send)
   WORK_DEFINITION(Subscribe)
+  WORK_DEFINITION(AddSourceFilter)
+  //WORK_DEFINITION(RemoveSourceFilter)
   WORK_DEFINITION(Stop)
   WORK_DEFINITION(Put)
   WORK_DEFINITION(Receive)
