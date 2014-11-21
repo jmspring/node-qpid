@@ -145,6 +145,18 @@ class Messenger : public node::ObjectWrap {
   static void CloseEmitter(uv_handle_t* handle);
   static Local<Object> MessageToJS(pn_message_t* message);
   static pn_message_t * JSToMessage(Local<Object>);
+  
+  // pn_data_parsing routines
+  static pn_type_t JSTypeToPNType(std::string type);
+  static std::string PNTypeToJSType(pn_type_t type);
+  static bool IsSimpleValue(pn_type_t type);
+  static Handle<Value> GetSimpleValue(pn_data_t *data);
+  static Handle<Value> GetDescribedValue(pn_data_t *data);
+  static Handle<Value> GetArrayValue(pn_data_t *data);
+  static Handle<Value> GetListValue(pn_data_t *data);
+  static Handle<Value> GetMapValue(pn_data_t *data);
+  static Handle<Value> ParseValue(pn_data_t *data);
+  static Local<Array> ParsePnData(pn_data_t *data);  
 
   static Handle<Value> New(const Arguments& args);
   std::string address;

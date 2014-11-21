@@ -210,11 +210,11 @@ pn_data_t *get_data_from_type_value(std::string & type, std::string & value, std
   } else if(type.compare("DECIMAL32") == 0) {
     pn_decimal32_t val;
     istream >> val;
-    pn_data_put_double(data, val);    
+    pn_data_put_decimal32(data, val);    
   } else if(type.compare("DECIMAL64") == 0) {
     pn_decimal64_t val;
     istream >> val;
-    pn_data_put_double(data, val);    
+    pn_data_put_decimal64(data, val);    
   } else if(type.compare("DECIMAL128") == 0) {
     pn_data_free(data);
     data = NULL;   
@@ -253,8 +253,327 @@ pn_data_t *get_data_from_type_value(std::string & type, std::string & value, std
     pn_data_free(data);
     data = NULL;
   }
-  
+    
   return data;  
+}
+
+pn_type_t Messenger::JSTypeToPNType(std::string type)
+{
+  pn_type_t rtype = PN_NULL;
+  
+  if(type.compare("NULL") == 0) {
+    rtype = PN_NULL;
+  } else if(type.compare("BOOL") == 0) {
+    rtype = PN_BOOL;
+  } else if(type.compare("UBYTE") == 0) {
+    rtype = PN_UBYTE;
+  } else if(type.compare("BYTE") == 0) {
+    rtype = PN_BYTE;
+  } else if(type.compare("USHORT") == 0) {
+    rtype = PN_USHORT;
+  } else if(type.compare("SHORT") == 0) {
+    rtype = PN_SHORT;
+  } else if(type.compare("UINT") == 0) {
+    rtype = PN_UINT;
+  } else if(type.compare("INT") == 0) {
+    rtype = PN_INT;
+  } else if(type.compare("CHAR") == 0) {
+    rtype = PN_CHAR;
+  } else if(type.compare("ULONG") == 0) {
+    rtype = PN_ULONG;
+  } else if(type.compare("LONG") == 0) {
+    rtype = PN_LONG;
+  } else if(type.compare("TIMESTAMP") == 0) {
+    rtype = PN_TIMESTAMP;
+  } else if(type.compare("FLOAT") == 0) {
+    rtype = PN_FLOAT;
+  } else if(type.compare("DOUBLE") == 0) {
+    rtype = PN_DOUBLE;
+  } else if(type.compare("DECIMAL32") == 0) {
+    rtype = PN_DECIMAL32;
+  } else if(type.compare("DECIMAL64") == 0) {
+    rtype = PN_DECIMAL64;
+  } else if(type.compare("DECIMAL128") == 0) {
+    rtype = PN_DECIMAL128;
+  } else if(type.compare("UUID") == 0) {
+    rtype = PN_UUID;
+  } else if(type.compare("BINARY") == 0) {
+    rtype = PN_BINARY;
+  } else if(type.compare("STRING") == 0) {
+    rtype = PN_STRING;
+  } else if(type.compare("SYMBOL") == 0) {
+    rtype = PN_SYMBOL;
+  } else if(type.compare("DESCRIBED") == 0) {
+    rtype = PN_DESCRIBED;
+  } else if(type.compare("ARRAY") == 0) {
+    rtype = PN_ARRAY;
+  } else if(type.compare("LIST") == 0) {
+    rtype = PN_LIST;
+  } else if(type.compare("MAP") == 0) {
+    rtype = PN_MAP;
+  }
+  
+  return rtype;    
+}
+
+std::string Messenger::PNTypeToJSType(pn_type_t type)
+{
+  std::string rtype;
+  
+  switch(type)
+  {
+    case PN_NULL:
+      rtype = std::string("NULL");
+      break;
+    case PN_BOOL:
+      rtype = std::string("BOOL");
+      break;
+    case PN_UBYTE:
+      rtype = std::string("UBYTE");
+      break;
+    case PN_BYTE:
+      rtype = std::string("BYTE");
+      break;
+    case PN_USHORT:
+      rtype = std::string("USHORT");
+      break;
+    case PN_SHORT:
+      rtype = std::string("SHORT");
+      break;
+    case PN_UINT:
+      rtype = std::string("UINT");
+      break;
+    case PN_INT:
+      rtype = std::string("INT");
+      break;
+    case PN_CHAR:
+      rtype = std::string("CHAR");
+      break;
+    case PN_ULONG:
+      rtype = std::string("ULONG");
+      break;
+    case PN_LONG:
+      rtype = std::string("LONG");
+      break;
+    case PN_TIMESTAMP:
+      rtype = std::string("TIMESTAMP");
+      break;
+    case PN_FLOAT:
+      rtype = std::string("FLOAT");
+      break;
+    case PN_DOUBLE:
+      rtype = std::string("DOUBLE");
+      break;
+    case PN_DECIMAL32:
+      rtype = std::string("DECIMAL32");
+      break;
+    case PN_DECIMAL64:
+      rtype = std::string("DECIMAL64");
+      break;
+    case PN_DECIMAL128:
+      rtype = std::string("DECIMAL128");
+      break;
+    case PN_UUID:
+      rtype = std::string("UUID");
+      break;
+    case PN_BINARY:
+      rtype = std::string("BINARY");
+      break;
+    case PN_STRING:
+      rtype = std::string("STRING");
+      break;
+    case PN_SYMBOL:
+      rtype = std::string("SYMBOL");
+      break;
+    case PN_DESCRIBED:
+      rtype = std::string("DESCRIBED");
+      break;
+    case PN_ARRAY:
+      rtype = std::string("ARRAY");
+      break;
+    case PN_LIST:
+      rtype = std::string("LIST");
+      break;
+    case PN_MAP:
+      rtype = std::string("MAP");
+      break;
+  }
+  
+  return rtype;    
+}
+
+bool Messenger::IsSimpleValue(pn_type_t type)
+{
+  bool rval = true;
+  switch(type)
+  {
+    case PN_DESCRIBED:
+    case PN_ARRAY:
+    case PN_LIST:
+    case PN_MAP:
+      rval = false;
+      break;
+    default:
+      ;
+  }
+  return rval;
+}
+
+Handle<Value> Messenger::GetSimpleValue(pn_data_t *data)
+{
+  HandleScope scope;
+  
+  switch(pn_data_type(data))
+  {
+    case PN_NULL:
+      return Boolean::New(false);
+    case PN_BOOL:
+      return Boolean::New(pn_data_get_bool(data));
+    case PN_UBYTE:
+      return Integer::NewFromUnsigned(pn_data_get_ubyte(data));
+    case PN_BYTE:
+      return Integer::New(pn_data_get_byte(data));
+    case PN_USHORT:
+      return Integer::NewFromUnsigned(pn_data_get_short(data));
+    case PN_SHORT:
+      return Integer::New(pn_data_get_short(data));
+    case PN_UINT:
+      return Integer::NewFromUnsigned(pn_data_get_uint(data));
+    case PN_INT:
+      return Integer::New(pn_data_get_int(data));
+    case PN_CHAR:
+      return Integer::New(pn_data_get_char(data));
+    case PN_ULONG:
+      return Number::New(pn_data_get_ulong(data));
+    case PN_LONG:
+      return Number::New(pn_data_get_long(data));
+    case PN_TIMESTAMP:
+      return Number::New(pn_data_get_timestamp(data));
+    case PN_FLOAT:
+      return Number::New(pn_data_get_float(data));
+    case PN_DOUBLE:
+      return Number::New(pn_data_get_double(data));
+    case PN_DECIMAL32:
+      return Number::New(pn_data_get_decimal32(data));
+    case PN_DECIMAL64:
+      return Number::New(pn_data_get_decimal64(data));
+    case PN_DECIMAL128:
+      {
+        pn_decimal128_t d128 = pn_data_get_decimal128(data);
+        return String::New(d128.bytes, 16);
+      }
+    case PN_UUID:
+      {
+        pn_uuid_t puu = pn_data_get_uuid(data);
+        return String::New(puu.bytes, 16);
+      }
+    case PN_BINARY:
+    case PN_STRING:
+    case PN_SYMBOL:
+      {
+        pn_bytes_t b;
+        if(pn_data_type(data) == PN_BINARY) {
+          b =  pn_data_get_binary(data);
+        } else if(pn_data_type(data) == PN_STRING) {      
+          b = pn_data_get_string(data);
+        } else {
+          b = pn_data_get_symbol(data);
+        }
+        return String::New(b.start, b.size);
+      }
+    default:
+      ;
+  }
+  return Null(); 
+}
+
+Handle<Value> Messenger::GetDescribedValue(pn_data_t *data)
+{
+  HandleScope scope;
+  
+  pn_data_enter(data);
+  Handle<Value> description = Messenger::ParsePnData(data);
+  pn_data_next(data);
+  Handle<Value> value = Messenger::ParsePnData(data);
+  pn_data_exit(data);
+  
+  Handle<Object> t(Object::New());
+  t->Set(String::New("description"), description);
+  t->Set(String::New("value"), value);
+  
+  return t;
+}
+
+Handle<Value> Messenger::GetArrayValue(pn_data_t *data)
+{
+  HandleScope scope;
+  
+  Handle<Array> t = Array::New();
+  int idx = 0;
+  pn_data_enter(data);
+  while(pn_data_next(data)) {
+    t->Set(idx++, Messenger::ParsePnData(data));
+  }
+  
+  return t;
+}
+
+Handle<Value> Messenger::GetListValue(pn_data_t *data)
+{
+  return Messenger::GetArrayValue(data);
+}
+
+Handle<Value> Messenger::GetMapValue(pn_data_t *data)
+{
+  HandleScope scope;
+  
+  Handle<Object> t(Array::New());
+
+  int nodes = pn_data_get_map(data);
+  if(nodes % 2) {
+    return Null();
+  } else {
+    pn_data_enter(data);
+    for(int i = 0; i < nodes / 2; i++) {
+      t->Set(2*i, ParsePnData(data));
+      t->Set(2*i+1, ParsePnData(data));
+    }
+  }
+  
+  return t;
+}
+
+Handle<Value> Messenger::ParseValue(pn_data_t *data)
+{
+  if(Messenger::IsSimpleValue(pn_data_type(data))) {
+    return GetSimpleValue(data);
+  } else if(pn_data_type(data) == PN_DESCRIBED) {
+    return GetDescribedValue(data);
+  } else if(pn_data_type(data) == PN_ARRAY) {
+    return GetArrayValue(data);
+  } else if(pn_data_type(data) == PN_ARRAY) {
+    return GetListValue(data);
+  } else if(pn_data_type(data) == PN_MAP) {
+    return GetMapValue(data);
+  }
+  return Null();
+}
+
+Local<Array> Messenger::ParsePnData(pn_data_t *data)
+{
+  HandleScope scope;
+ /* 
+  Local<Object> t(Object::New());
+  
+  pn_data_next(data);
+  t->Set(String::New("type"), String::New(PNTypeToJSType(pn_data_type(data)).c_str()));
+  t->Set(String::New("value"), ParseValue(data));
+  */
+  Local<Array> t = Array::New();
+  pn_data_next(data);
+  t->Set(0, String::New(PNTypeToJSType(pn_data_type(data)).c_str()));
+  t->Set(1, ParseValue(data));
+  return scope.Close(t);
 }
 
 Handle<Value> Messenger::AddSourceFilter(const Arguments& args) {
@@ -273,7 +592,7 @@ Handle<Value> Messenger::AddSourceFilter(const Arguments& args) {
   std::string describestr = std::string(*key);
   // TODO -- hack, assume described type "description" is equal to the key
   pn_data_t *data = get_data_from_type_value(typestr, valuestr, describestr);
-
+  
   if(data) {
     msgr->address = *addr;
   
@@ -283,7 +602,6 @@ Handle<Value> Messenger::AddSourceFilter(const Arguments& args) {
   }
 
   return args.This();
-  
 }
 
 void Messenger::Work_BeginAddSourceFilter(Baton* baton) {
@@ -609,7 +927,6 @@ pn_message_t* Messenger::JSToMessage(Local<Object> obj) {
   }
 
   return(message);
-
 }
 
 Local<Object> Messenger::MessageToJS(pn_message_t* message) {
@@ -618,11 +935,25 @@ Local<Object> Messenger::MessageToJS(pn_message_t* message) {
 
   size_t buffsize = 1024;
   char buffer[1024];
+
+  // handle the body
   pn_data_t *body = pn_message_body(message);
   pn_data_format(body, buffer, &buffsize);
-
   result->Set(String::NewSymbol("body"), Local<Value>(String::New(buffer)));
+  
+  // check for annotations
+  pn_data_t *annotations = pn_message_annotations(message);
+  if(annotations && pn_data_size(annotations) > 0) {
+    Handle<Value> anno = Messenger::ParsePnData(annotations);
+    result->Set(String::NewSymbol("annotations"), anno);
+  }
 
+  // check for properties
+  pn_data_t *properties = pn_message_properties(message);
+  if(properties && pn_data_size(properties) > 0) {
+    Handle<Value> prop = Messenger::ParsePnData(properties);
+    result->Set(String::NewSymbol("properties"), prop);
+  }
+  
   return result;
-
 }
