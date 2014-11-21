@@ -58,12 +58,11 @@ class Messenger : public node::ObjectWrap {
   struct AddSourceFilterBaton : Baton {
 
     std::string address;
-    std::string filter_key;
-    pn_type_t filter_type;
+    pn_data_t *filter_key;
     pn_data_t *filter_value;
 
-    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, const char *filter_key_, pn_type_t filter_type_, pn_data_t *filter_value_) :
-      Baton(msgr_, cb_), address(address_), filter_key(filter_key_), filter_type(filter_type_), filter_value(filter_value_) {}
+    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, pn_data_t *filter_key_, pn_data_t *filter_value_) :
+      Baton(msgr_, cb_), address(address_), filter_key(filter_key_), filter_value(filter_value_) {}
 
   };
 /*
@@ -157,6 +156,13 @@ class Messenger : public node::ObjectWrap {
   static Handle<Value> GetMapValue(pn_data_t *data);
   static Handle<Value> ParseValue(pn_data_t *data);
   static Local<Array> ParsePnData(pn_data_t *data);  
+  static pn_data_t *ParseJSData(Handle<Value> jsval);
+  static pn_data_t *GetSimpleJSValue(pn_type_t type, Local<Value> jsval);
+  static pn_data_t *GetDescribedJSValue(Handle<Array> array);
+  static pn_data_t *GetArrayOrListJSValue(pn_type_t type, Handle<Array> array);
+  static pn_data_t *GetArrayJSValue(Handle<Array> array);
+  static pn_data_t *GetListJSValue(Handle<Array> array);
+  static pn_data_t *GetMapJSValue(Handle<Array> array);
 
   static Handle<Value> New(const Arguments& args);
   std::string address;

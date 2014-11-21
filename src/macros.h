@@ -48,6 +48,14 @@
     }                                                                          \
     String::Utf8Value var(args[i]->ToString());
 
+#define REQUIRE_ARGUMENT_ARRAY(i, var)                                         \
+    if (args.Length() <= (i) || !args[i]->IsArray()) {                         \
+        return ThrowException(Exception::TypeError(                            \
+            String::New("Argument " #i " must be an array"))                   \
+        );                                                                     \
+    }                                                                          \
+    Local<Array> var = Local<v8::Array>::Cast(args[i])
+    
 /* Would really like to know how to write this... :-(
 #define OPTIONAL_ARGUMENT_STRING(i, var)					\
 */
