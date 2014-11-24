@@ -127,10 +127,7 @@ class Messenger : public node::ObjectWrap {
 
  private:
   Messenger();
-  ~Messenger() {
-    pn_messenger_stop(messenger);
-    pn_messenger_stop(receiver);
-  }
+  ~Messenger();
 
   WORK_DEFINITION(Send)
   WORK_DEFINITION(Subscribe)
@@ -172,6 +169,9 @@ class Messenger : public node::ObjectWrap {
   bool receiveWait;
   ReceiveBaton * receiveWaitBaton;
   int subscriptions;
+  
+ NODE_CPROTON_MUTEX_t
+
 };
 
 #endif

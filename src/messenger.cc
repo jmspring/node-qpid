@@ -16,9 +16,16 @@ using namespace v8;
 using namespace node;
 using namespace std;
 
-Messenger::Messenger() { };
+Messenger::Messenger() { 
+  //pn_ssl_globals_init();
+  NODE_CPROTON_MUTEX_INIT
+};
 
-// Messenger::~Messenger() { };
+Messenger::~Messenger() {
+  pn_messenger_stop(messenger);
+  pn_messenger_stop(receiver);
+  NODE_CPROTON_MUTEX_DESTROY
+}
 
 Persistent<FunctionTemplate> Messenger::constructor_template;
 
@@ -101,8 +108,9 @@ void Messenger::Work_Subscribe(uv_work_t* req) {
 
   SubscribeBaton* baton = static_cast<SubscribeBaton*>(req->data);
 
+  NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
   pn_messenger_subscribe(baton->msgr->receiver, baton->address.c_str());
-
+  NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 }
 
 void Messenger::Work_AfterSubscribe(uv_work_t* req) {
