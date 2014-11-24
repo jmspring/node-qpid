@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include <string.h>
+#include <uuid/uuid.h>
 
 #include "messenger.h"
 #include "async.h"

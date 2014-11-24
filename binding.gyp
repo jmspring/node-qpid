@@ -8,13 +8,16 @@
       'conditions': [
         ['OS=="linux"', {
           "link_settings" : {
-            "libraries": [ '-lqpid-proton' ],
+            "libraries": [ 
+              '-L/usr/local/qpid-proton/lib',
+              '-lqpid-proton' 
+            ],
           },
           "include_dirs": [ 
-            '/usr/include/proton', 
             '/usr/include/nodejs/src',
             '/usr/include/nodejs/deps/uv/include/',
             '/usr/include/nodejs/deps/v8/include/',
+            '/usr/local/qpid-proton/include'
           ],
           "cflags": [
             "-fPIC"
