@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include <node.h>
 
@@ -47,12 +48,11 @@ class Messenger : public node::ObjectWrap {
   };
 
   struct SubscribeBaton : Baton {
+    int subscriptionIndex;
 
-    std::string address;
-
-    SubscribeBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_) :
-      Baton(msgr_, cb_), address(address_) {}
-
+    SubscribeBaton(Messenger* msgr_, int subIndex, Handle<Function> cb_) :
+      Baton(msgr_, cb_),
+      subscriptionIndex(subIndex) {};
   };
   
   struct AddSourceFilterBaton : Baton {
@@ -65,17 +65,7 @@ class Messenger : public node::ObjectWrap {
       Baton(msgr_, cb_), address(address_), filter_key(filter_key_), filter_value(filter_value_) {}
 
   };
-/*
-  struct RemoveSourceFilterBaton : Baton {
 
-    std::string address;
-    std::string filter_key;
-
-    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, const char *filter_key_, pn_type_t filter_type_, void *filter_value_) :
-      Baton(msgr_, cb_), address(address_), filter_key(filter_key_) {}
-
-  };
-*/
   struct SendBaton : Baton {
 
     pn_message_t * msg;
@@ -101,7 +91,7 @@ class Messenger : public node::ObjectWrap {
     uv_async_t watcher;
     Messenger* msgr;
     Messages data;
-    NODE_CPROTON_MUTEX_t;
+    NODE_CPROTON_MUTEX_t(mutex);
     bool completed;
     int retrieved;
 
@@ -112,7 +102,7 @@ class Messenger : public node::ObjectWrap {
     Async(Messenger* m, uv_async_cb async_cb) :
             msgr(m), completed(false), retrieved(0) {
         watcher.data = this;
-        NODE_CPROTON_MUTEX_INIT
+        NODE_CPROTON_MUTEX_INIT(mutex)
         msgr->Ref();
         uv_async_init(uv_default_loop(), &watcher, async_cb);
     }
@@ -120,10 +110,26 @@ class Messenger : public node::ObjectWrap {
     ~Async() {
         msgr->Unref();
         emitter.Dispose();
-        NODE_CPROTON_MUTEX_DESTROY
+        NODE_CPROTON_MUTEX_DESTROY(mutex)
     }
   };
-
+  
+  struct Subscription {
+    Subscription(std::string address_, Handle<Object> argbag_, Handle<Function> cb_) :
+        address(address_),
+        argbag(argbag_),
+        callback(Persistent<Function>::New(cb_)) {};
+        
+    std::string address;
+    Handle<Object> argbag;
+    Persistent<Function> callback;
+  };
+  
+  Subscription *GetSubscriptionByAddress(std::string addr);
+  Subscription *GetSubscriptionByIndex(unsigned long idx);
+  Subscription *GetSubscriptionByHandle(pn_subscription_t *sub);
+  unsigned long AddSubscription(Subscription *sub);
+  bool SetSubscriptionHandle(unsigned long idx, pn_subscription_t *sub);
 
  private:
   Messenger();
@@ -132,7 +138,6 @@ class Messenger : public node::ObjectWrap {
   WORK_DEFINITION(Send)
   WORK_DEFINITION(Subscribe)
   WORK_DEFINITION(AddSourceFilter)
-  //WORK_DEFINITION(RemoveSourceFilter)
   WORK_DEFINITION(Stop)
   WORK_DEFINITION(Put)
   WORK_DEFINITION(Receive)
@@ -160,6 +165,7 @@ class Messenger : public node::ObjectWrap {
   static pn_data_t *GetArrayJSValue(Handle<Array> array);
   static pn_data_t *GetListJSValue(Handle<Array> array);
   static pn_data_t *GetMapJSValue(Handle<Array> array);
+  
 
   static Handle<Value> New(const Arguments& args);
   std::string address;
@@ -167,11 +173,14 @@ class Messenger : public node::ObjectWrap {
   pn_messenger_t * receiver;
   bool receiving;
   bool receiveWait;
+  NODE_CPROTON_MUTEX_t(mutex);
   ReceiveBaton * receiveWaitBaton;
-  int subscriptions;
   
- NODE_CPROTON_MUTEX_t
-
+  std::vector<Subscription *> _subscriptions;
+  std::map<std::string, unsigned long> _addressToSubscriptionMap;
+  std::map<pn_subscription_t *, unsigned long> _handleToSubscriptionMap;
+  
+  int subscriptions;
 };
 
 #endif

@@ -71,6 +71,13 @@
         var = Local<Function>::Cast(args[i]);                                  \
     }
 
+#define OPTIONAL_ARGUMENT_OBJECT(i, var)						                           \
+    if (args.Length() <= (i) || !args[i]->IsObject()) {				                 \
+        return ThrowException(Exception::TypeError(				                     \
+            String::New("Argument " #i " must be an object"))			             \
+        );									                                                   \
+    }										                                                       \
+    Local<Object> var = args[i]->ToObject();
 
 #define OPTIONAL_ARGUMENT_INTEGER(i, var, default)                             \
     int var;                                                                   \

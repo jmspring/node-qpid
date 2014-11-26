@@ -16,7 +16,7 @@ template <class Item, class Parent> class Async {
 
 protected:
     uv_async_t watcher;
-    NODE_CPROTON_MUTEX_t
+    NODE_CPROTON_MUTEX_t(mutex);
     std::vector<Item*> data;
     Callback callback;
 public:
@@ -26,7 +26,7 @@ public:
     Async(Parent* parent_, Callback cb_)
         : callback(cb_), parent(parent_) {
         watcher.data = this;
-        NODE_CPROTON_MUTEX_INIT
+        NODE_CPROTON_MUTEX_INIT(mutex)
         uv_async_init(uv_default_loop(), &watcher, listener);
     }
 
@@ -84,7 +84,7 @@ public:
     }
 
     ~Async() {
-        NODE_CPROTON_MUTEX_DESTROY
+        NODE_CPROTON_MUTEX_DESTROY(mutex)
     }
 };
 

@@ -12,27 +12,29 @@
 
 #include <windows.h>
 
-    #define NODE_CPROTON_MUTEX_t HANDLE mutex;
+    #define NODE_CPROTON_MUTEX_t(m) HANDLE m;
 
-    #define NODE_CPROTON_MUTEX_INIT CreateMutex(NULL, FALSE, NULL);
+    #define NODE_CPROTON_MUTEX_INIT(m) m = CreateMutex(NULL, FALSE, NULL);
 
     #define NODE_CPROTON_MUTEX_LOCK(m) WaitForSingleObject(m, INFINITE);
 
     #define NODE_CPROTON_MUTEX_UNLOCK(m) ReleaseMutex(m);
 
-    #define NODE_CPROTON_MUTEX_DESTROY CloseHandle(mutex);
+    #define NODE_CPROTON_MUTEX_DESTROY(m) CloseHandle(m);
 
 #else
 
-    #define NODE_CPROTON_MUTEX_t pthread_mutex_t mutex;
+#include <pthread.h>
 
-    #define NODE_CPROTON_MUTEX_INIT pthread_mutex_init(&mutex,NULL);
+    #define NODE_CPROTON_MUTEX_t(m) pthread_mutex_t m;
+
+    #define NODE_CPROTON_MUTEX_INIT(m) pthread_mutex_init(&m,NULL);
 
     #define NODE_CPROTON_MUTEX_LOCK(m) pthread_mutex_lock(m);
 
     #define NODE_CPROTON_MUTEX_UNLOCK(m) pthread_mutex_unlock(m);
 
-    #define NODE_CPROTON_MUTEX_DESTROY pthread_mutex_destroy(&mutex);
+    #define NODE_CPROTON_MUTEX_DESTROY(m) pthread_mutex_destroy(&m);
 
 #endif
 

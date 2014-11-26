@@ -5,6 +5,7 @@
 #include <string>
 #include <algorithm>
 #include <sstream>
+#include <map>
 
 #include <string.h>
 #include <uuid/uuid.h>
@@ -18,14 +19,13 @@ using namespace node;
 using namespace std;
 
 Messenger::Messenger() { 
-  //pn_ssl_globals_init();
-  NODE_CPROTON_MUTEX_INIT
+  NODE_CPROTON_MUTEX_INIT(mutex);
 };
 
 Messenger::~Messenger() {
   pn_messenger_stop(messenger);
   pn_messenger_stop(receiver);
-  NODE_CPROTON_MUTEX_DESTROY
+  NODE_CPROTON_MUTEX_DESTROY(mutex);
 }
 
 Persistent<FunctionTemplate> Messenger::constructor_template;
@@ -79,22 +79,75 @@ Handle<Value> Messenger::New(const Arguments& args) {
   return args.This();
 }
 
+Messenger::Subscription *Messenger::GetSubscriptionByAddress(std::string addr) {
+  Subscription *rval = NULL;
+  std::map<std::string, unsigned long>::iterator it = _addressToSubscriptionMap.find(addr);
+  if(it != _addressToSubscriptionMap.end()) {
+    if(it->second < _subscriptions.size()) {
+      rval = _subscriptions.at(it->second);
+    }
+  }
+  return rval;
+}
+
+Messenger::Subscription *Messenger::GetSubscriptionByIndex(unsigned long idx) {
+  Subscription *rval = NULL;
+  if(idx < _subscriptions.size()) {
+    rval = _subscriptions.at(idx);
+  }
+  return rval;
+}
+
+Messenger::Subscription *Messenger::GetSubscriptionByHandle(pn_subscription_t *sub) {
+  Subscription *rval = NULL;
+  std::map<pn_subscription_t *, unsigned long>::iterator it = _handleToSubscriptionMap.find(sub);
+  if(it != _handleToSubscriptionMap.end()) {
+    if(it->second < _subscriptions.size()) {
+      rval = _subscriptions.at(it->second);
+    }
+  }
+  return rval;
+}
+
+unsigned long Messenger::AddSubscription(Messenger::Subscription *sub) {
+  unsigned long idx = ULONG_MAX;
+  if(sub) {
+    _subscriptions.push_back(sub);
+    idx = _subscriptions.size() - 1;
+    _addressToSubscriptionMap.insert( std::pair<std::string, unsigned long>( sub->address, idx ));
+  }
+  return idx;
+}
+
+bool Messenger::SetSubscriptionHandle(unsigned long idx, pn_subscription_t *sub) {
+  bool rval = false;
+  if(sub) {
+    std::map<pn_subscription_t *, unsigned long>::iterator it = _handleToSubscriptionMap.find(sub);
+    if(it == _handleToSubscriptionMap.end()) {
+      _handleToSubscriptionMap.insert( std::pair<pn_subscription_t *, unsigned long>( sub, idx ));
+      rval = true;
+    }
+  }
+  return rval;
+}
+
 Handle<Value> Messenger::Subscribe(const Arguments& args) {
   HandleScope scope;
 
   Messenger* msgr = ObjectWrap::Unwrap<Messenger>(args.This());
 
   REQUIRE_ARGUMENT_STRING(0, addr);
-  OPTIONAL_ARGUMENT_FUNCTION(1, callback);
-
-  msgr->address = *addr;
-
-  SubscribeBaton* baton = new SubscribeBaton(msgr, callback, *addr);
+  REQUIRE_ARGUMENT_OBJECT(1, bag);
+  OPTIONAL_ARGUMENT_FUNCTION(2, callback);
   
+  NODE_CPROTON_MUTEX_LOCK(&msgr->mutex);
+  int subIdx = msgr->AddSubscription(new Subscription(*addr, bag, callback));  
+  Local<Function> var;
+  SubscribeBaton *baton = new SubscribeBaton(msgr, subIdx, var);
   Work_BeginSubscribe(baton);
-
+  NODE_CPROTON_MUTEX_UNLOCK(&msgr->mutex);
+    
   return args.This();
-  
 }
 
 void Messenger::Work_BeginSubscribe(Baton* baton) {
@@ -110,43 +163,47 @@ void Messenger::Work_Subscribe(uv_work_t* req) {
   SubscribeBaton* baton = static_cast<SubscribeBaton*>(req->data);
 
   NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
-  pn_messenger_subscribe(baton->msgr->receiver, baton->address.c_str());
+  Subscription *subscription = baton->msgr->GetSubscriptionByIndex(baton->subscriptionIndex);
+  if(subscription != NULL) {
+    pn_subscription_t * sub = pn_messenger_subscribe(baton->msgr->receiver, subscription->address.c_str());
+    baton->msgr->SetSubscriptionHandle(baton->subscriptionIndex, sub);
+  }
   NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 }
 
 void Messenger::Work_AfterSubscribe(uv_work_t* req) {
 
   SubscribeBaton* baton = static_cast<SubscribeBaton*>(req->data);
+  
+  NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
+  Subscription *subscription = baton->msgr->GetSubscriptionByIndex(baton->subscriptionIndex);
+  if(subscription) {
+    if(!subscription->callback.IsEmpty() && subscription->callback->IsFunction()) {
+      Local<Value> args[] = { Local<Value>::New(Null()), String::New(subscription->address.c_str()) }; 
+      subscription->callback->Call(Context::GetCurrent()->Global(), 2, args);
+    } else {
+      Local<Value> args[] = { String::New("subscribed"), String::New(subscription->address.c_str()) };
+        EMIT_EVENT(baton->msgr->handle_, 2, args);
+    }
+  }
+  NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 
   baton->msgr->subscriptions++;
-
+#if 0
+// TODO -- add error handling???
   if (baton->error_code > 0) {
     /* Local<Value> err = Exception::Error(
     String::New(baton->error_message.c_str()));
     Local<Value> argv[2] = { Local<Value>::New(String::New("error")), err };
     MakeCallback(baton->obj, "emit", 2, argv); */
-  } else {
-    if (!baton->callback.IsEmpty() && baton->callback->IsFunction()) {
-      
-      Local<Value> args[] = { Local<Value>::New(Null()), String::New(baton->address.c_str()) }; 
-      baton->callback->Call(Context::GetCurrent()->Global(), 2, args);
-      
-    } else {
-
-      Local<Value> args[] = { String::New("subscribed"), String::New(baton->address.c_str()) };
-      EMIT_EVENT(baton->msgr->handle_, 2, args);
-
-    }
-  }
+  } 
+#endif   
 
   if (baton->msgr->receiveWait) {
-
     Work_BeginReceive(baton->msgr->receiveWaitBaton);
-
   }
 
   delete baton;
-
 }
 
 static std::string lowercase(std::string & str) 
@@ -1189,3 +1246,4 @@ Local<Object> Messenger::MessageToJS(pn_message_t* message) {
   
   return result;
 }
+
