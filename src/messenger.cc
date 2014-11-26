@@ -8,6 +8,7 @@
 #include <map>
 
 #include <string.h>
+#include <limits.h>
 #include <uuid/uuid.h>
 
 #include "messenger.h"
@@ -140,12 +141,38 @@ Handle<Value> Messenger::Subscribe(const Arguments& args) {
   REQUIRE_ARGUMENT_OBJECT(1, bag);
   OPTIONAL_ARGUMENT_FUNCTION(2, callback);
   
+  
+  pn_data_t *filter_key = NULL, *filter_value = NULL;
+  if(bag->Has(String::New("sourceFilter"))) {
+    Handle<Value> obj = bag->Get(String::New("sourceFilter"));
+    if(obj->IsArray()) {
+      Handle<Array> filter = Handle<v8::Array>::Cast(obj);
+      if(filter->Length() == 2) {
+        filter_key = ParseJSData(filter->Get(0));
+        filter_value = ParseJSData(filter->Get(1));
+        
+        if(!filter_key || !filter_value) {
+          // TODO -- error;
+          if(filter_key) {
+            pn_data_free(filter_key);
+          }
+          if(filter_value) {
+            pn_data_free(filter_value);
+          }
+          filter_key = filter_value = NULL;
+        }
+      }
+    } else {
+      // TODO -- unsupported
+    }
+  }
+  
   NODE_CPROTON_MUTEX_LOCK(&msgr->mutex);
-  int subIdx = msgr->AddSubscription(new Subscription(*addr, bag, callback));  
-  Local<Function> var;
-  SubscribeBaton *baton = new SubscribeBaton(msgr, subIdx, var);
-  Work_BeginSubscribe(baton);
+  int subIdx = msgr->AddSubscription(new Subscription(*addr, callback));  
   NODE_CPROTON_MUTEX_UNLOCK(&msgr->mutex);
+  Local<Function> var;
+  SubscribeBaton *baton = new SubscribeBaton(msgr, subIdx, filter_key, filter_value, var);
+  Work_BeginSubscribe(baton);
     
   return args.This();
 }
@@ -159,19 +186,28 @@ void Messenger::Work_BeginSubscribe(Baton* baton) {
 }
 
 void Messenger::Work_Subscribe(uv_work_t* req) {
-
   SubscribeBaton* baton = static_cast<SubscribeBaton*>(req->data);
 
   NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
   Subscription *subscription = baton->msgr->GetSubscriptionByIndex(baton->subscriptionIndex);
   if(subscription != NULL) {
     pn_subscription_t * sub = pn_messenger_subscribe(baton->msgr->receiver, subscription->address.c_str());
-    baton->msgr->SetSubscriptionHandle(baton->subscriptionIndex, sub);
+    if(sub) {
+      baton->msgr->SetSubscriptionHandle(baton->subscriptionIndex, sub);
+      if(baton->filter_key && baton->filter_value) {
+        baton->msgr->SetSourceFilter(subscription->address, baton->filter_key, baton->filter_value);
+      }
+    } else {
+      // TODO -- error getting subscription?
+    }
+  } else {
+    // TODO -- something bad happened
   }
   NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 }
 
 void Messenger::Work_AfterSubscribe(uv_work_t* req) {
+  HandleScope scope;
 
   SubscribeBaton* baton = static_cast<SubscribeBaton*>(req->data);
   
@@ -186,9 +222,9 @@ void Messenger::Work_AfterSubscribe(uv_work_t* req) {
         EMIT_EVENT(baton->msgr->handle_, 2, args);
     }
   }
+  baton->msgr->subscriptions++;
   NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 
-  baton->msgr->subscriptions++;
 #if 0
 // TODO -- add error handling???
   if (baton->error_code > 0) {
@@ -885,11 +921,9 @@ Handle<Value> Messenger::AddSourceFilter(const Arguments& args) {
   
   pn_data_t *key = ParseJSData(filter->Get(0));
   pn_data_t *value = ParseJSData(filter->Get(1));
-  
+
   if(key && value) {
-    msgr->address = *addr;
     AddSourceFilterBaton *baton = new AddSourceFilterBaton(msgr, callback, *addr, key, value);
-  
     Work_BeginAddSourceFilter(baton);
   }
 
@@ -904,11 +938,41 @@ void Messenger::Work_BeginAddSourceFilter(Baton* baton) {
 
 }
 
+void Messenger::SetSourceFilter(std::string & address, pn_data_t *key, pn_data_t *value) {
+  pn_link_t *link = pn_messenger_get_link(this->receiver, address.c_str(), 0);
+  if(link) {
+    pn_terminus_t *sr = pn_link_source(link);
+    if(sr) {
+      pn_data_t *filter = pn_terminus_filter(sr);
+      if(filter) {
+        if(pn_data_size(filter) == 0) {
+          pn_data_put_map(filter);
+        }
+        pn_data_next(filter);
+        pn_data_enter(filter);
+        while(pn_data_next(filter)) {
+          // go to the end of the map
+          ;
+        }
+        pn_data_append(filter, key);
+        pn_data_append(filter, value);
+        pn_data_exit(filter);
+        pn_data_rewind(filter);
+      }
+    }
+  }
+}
+
 void Messenger::Work_AddSourceFilter(uv_work_t* req) {
 
   AddSourceFilterBaton* baton = static_cast<AddSourceFilterBaton*>(req->data);
   
   // TODO - add check for subscribed to address
+  NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
+  baton->msgr->SetSourceFilter(baton->address, baton->filter_key, baton->filter_value);
+  NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
+
+  /*
   pn_link_t *link = pn_messenger_get_link(baton->msgr->receiver, baton->address.c_str(), 0);
   if(link) {
     pn_terminus_t *sr = pn_link_source(link);
@@ -931,6 +995,7 @@ void Messenger::Work_AddSourceFilter(uv_work_t* req) {
       }
     }
   }
+  */
 }
 
 void Messenger::Work_AfterAddSourceFilter(uv_work_t* req) {
