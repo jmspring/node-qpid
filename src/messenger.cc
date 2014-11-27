@@ -215,11 +215,11 @@ void Messenger::Work_AfterSubscribe(uv_work_t* req) {
   Subscription *subscription = baton->msgr->GetSubscriptionByIndex(baton->subscriptionIndex);
   if(subscription) {
     if(!subscription->callback.IsEmpty() && subscription->callback->IsFunction()) {
-      Local<Value> args[] = { Local<Value>::New(Null()), String::New(subscription->address.c_str()) }; 
-      subscription->callback->Call(Context::GetCurrent()->Global(), 2, args);
+      Local<Value> args[] = { String::New(subscription->address.c_str()) }; 
+      subscription->callback->Call(Context::GetCurrent()->Global(), 1, args);
     } else {
       Local<Value> args[] = { String::New("subscribed"), String::New(subscription->address.c_str()) };
-        EMIT_EVENT(baton->msgr->handle_, 2, args);
+      EMIT_EVENT(baton->msgr->handle_, 2, args);
     }
   }
   baton->msgr->subscriptions++;
