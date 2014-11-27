@@ -16,7 +16,12 @@
 using namespace v8;
 using namespace node;
 
-typedef std::vector<pn_message_t*> Messages;
+struct MessageInfo {
+  pn_message_t *message;
+  std::string  subscription_address;
+};
+
+typedef std::vector<MessageInfo *> Messages;
 
 class Messenger : public node::ObjectWrap {
  public:

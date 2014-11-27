@@ -1149,9 +1149,17 @@ void Messenger::Work_Receive(uv_work_t* req) {
 
       pn_message_t* message = pn_message();
       pn_messenger_get(receiver, message);
+      pn_subscription_t *subscription = pn_messenger_incoming_subscription(receiver);
+      
+      MessageInfo *mi = new MessageInfo();
+      mi->message = message;
 
       NODE_CPROTON_MUTEX_LOCK(&async->mutex)
-      async->data.push_back(message);
+      Messenger::Subscription *sub = baton->msgr->GetSubscriptionByHandle(subscription);
+      if(sub) {
+        mi->subscription_address = sub->address;
+      }
+      async->data.push_back(mi);
       NODE_CPROTON_MUTEX_UNLOCK(&async->mutex)
 
       uv_async_send(&async->watcher);
@@ -1182,18 +1190,18 @@ void Messenger::AsyncReceive(uv_async_t* handle, int status) {
       break;
     }
 
-    Local<Value> argv[2];
+    Local<Value> argv[3];
 
     Messages::const_iterator it = messages.begin();
     Messages::const_iterator end = messages.end();
     for (int i = 0; it < end; it++, i++) {
 
       argv[0] = String::NewSymbol("message");
-      argv[1] = MessageToJS(*it);
-      TRY_CATCH_CALL(async->msgr->handle_, async->emitter, 2, argv)
-      pn_message_free(*it);
-      // delete *it;
-
+      argv[1] = MessageToJS((*it)->message);
+      argv[2] = String::New((*it)->subscription_address.c_str());
+      TRY_CATCH_CALL(async->msgr->handle_, async->emitter, 3, argv)
+      pn_message_free((*it)->message);
+      delete (*it);
     }
 
   }
