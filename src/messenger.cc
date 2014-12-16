@@ -307,30 +307,6 @@ void Messenger::Work_AddSourceFilter(uv_work_t* req) {
   baton->msgr->SetSourceFilter(baton->address, baton->filter_key, baton->filter_value);
   NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
 
-  /*
-  pn_link_t *link = pn_messenger_get_link(baton->msgr->receiver, baton->address.c_str(), 0);
-  if(link) {
-    pn_terminus_t *sr = pn_link_source(link);
-    if(sr) {
-      pn_data_t *filter = pn_terminus_filter(sr);
-      if(filter) {
-        if(pn_data_size(filter) == 0) {
-          pn_data_put_map(filter);
-        }
-        pn_data_next(filter);
-        pn_data_enter(filter);
-        while(pn_data_next(filter)) {
-          // go to the end of the map
-          ;
-        }
-        pn_data_append(filter, baton->filter_key);
-        pn_data_append(filter, baton->filter_value);
-        pn_data_exit(filter);
-        pn_data_rewind(filter);
-      }
-    }
-  }
-  */
 }
 
 void Messenger::Work_AfterAddSourceFilter(uv_work_t* req) {
@@ -389,10 +365,13 @@ void Messenger::Work_Send(uv_work_t* req) {
   pn_messenger_t* messenger = baton->msgr->messenger;
   pn_message_t* message = baton->msg;
 
+  NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
   assert(!pn_messenger_put(messenger, message));
   baton->tracker = pn_messenger_outgoing_tracker(messenger);
 
   assert(!pn_messenger_send(messenger, -1));
+  NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
+
 
   pn_message_free(message);
 
