@@ -14,18 +14,21 @@
 #include "messenger.h"
 #include "async.h"
 
-
 using namespace v8;
 using namespace node;
 using namespace std;
 
 Messenger::Messenger() { 
   NODE_CPROTON_MUTEX_INIT(mutex);
+  messageSender = new MessageSender(this);
+  messageSettler = new MessageSettler(this);
 };
 
 Messenger::~Messenger() {
   pn_messenger_stop(messenger);
   pn_messenger_stop(receiver);
+  delete(messageSender);
+  delete(messageSettler);
   NODE_CPROTON_MUTEX_DESTROY(mutex);
 }
 
@@ -57,11 +60,12 @@ Handle<Value> Messenger::New(const Arguments& args) {
   Messenger* msgr = new Messenger();
 
   pn_messenger_t* messenger = pn_messenger(NULL);
+  pn_messenger_set_blocking(messenger, false);
   pn_messenger_start(messenger);
   msgr->messenger = messenger;
 
-  // Temporary fix 
-  pn_messenger_set_outgoing_window(msgr->messenger, 1);
+  // Temporary fix -- should tune this
+  pn_messenger_set_outgoing_window(msgr->messenger, 50);
 
   pn_messenger_t* receiver = pn_messenger(NULL);
   pn_messenger_set_incoming_window(receiver, 1);
@@ -340,58 +344,36 @@ Handle<Value> Messenger::Send(const Arguments& args) {
 
   REQUIRE_ARGUMENT_OBJECT(0, obj);
   OPTIONAL_ARGUMENT_FUNCTION(1, callback);
+  pn_message_t *msg = JSToMessage(obj);
 
-  pn_message_t* msg = JSToMessage(obj);
-
-  SendBaton* baton = new SendBaton(msgr, callback, msg);
-  
-  Work_BeginSend(baton);
+  InFlightMessage *ifmsg = new InFlightMessage(obj, msg, callback);
+  msgr->messageSender->AppendMessage(ifmsg);
 
   return Undefined();
-    
 }
 
+
 void Messenger::Work_BeginSend(Baton* baton) {
+  SendBaton * send_baton = static_cast<SendBaton *>(baton);
+  
   int status = uv_queue_work(uv_default_loop(),
     &baton->request, Work_Send, (uv_after_work_cb)Work_AfterSend);
 
   assert(status == 0);
-
 }
 
 void Messenger::Work_Send(uv_work_t* req) {
 
   SendBaton* baton = static_cast<SendBaton*>(req->data);
-  pn_messenger_t* messenger = baton->msgr->messenger;
-  pn_message_t* message = baton->msg;
-
-  NODE_CPROTON_MUTEX_LOCK(&baton->msgr->mutex)
-  assert(!pn_messenger_put(messenger, message));
-  baton->tracker = pn_messenger_outgoing_tracker(messenger);
-
-  assert(!pn_messenger_send(messenger, -1));
-  NODE_CPROTON_MUTEX_UNLOCK(&baton->msgr->mutex)
-
-
-  pn_message_free(message);
-
+  
 }
 
 void Messenger::Work_AfterSend(uv_work_t* req) {
   HandleScope scope;
+  
   SendBaton* baton = static_cast<SendBaton*>(req->data);
-
-  if (baton->error_code > 0) {
-    Local<Value> err = Exception::Error(String::New(baton->error_message.c_str()));
-    Local<Value> argv[] = { err };
-    baton->callback->Call(Context::GetCurrent()->Global(), 1, argv);
-  } else {
-    Local<Value> argv[1];
-    baton->callback->Call(Context::GetCurrent()->Global(), 0, argv);
-  }
-
+  
   delete baton;
-
 }
 
 Handle<Value> Messenger::Receive(const Arguments& args) {
@@ -457,7 +439,7 @@ void Messenger::Work_Receive(uv_work_t* req) {
 
   while (baton->msgr->receiving) {
 
-    pn_messenger_recv(receiver, 1024);
+    pn_messenger_recv(receiver, 150);
 
     while(pn_messenger_incoming(receiver)) {
 
@@ -634,3 +616,82 @@ Local<Object> Messenger::MessageToJS(pn_message_t* message) {
   return result;
 }
 
+int Messenger::MessengerGetOutgoingWindow(void)
+{
+  int result;
+  NODE_CPROTON_MUTEX_LOCK(&mutex)
+  result = pn_messenger_get_outgoing_window(messenger);
+  NODE_CPROTON_MUTEX_UNLOCK(&mutex)
+  return result;
+}
+
+int Messenger::MessengerGetOutgoing(void){
+  int result;
+  NODE_CPROTON_MUTEX_LOCK(&mutex)
+  result = pn_messenger_outgoing(messenger);
+  NODE_CPROTON_MUTEX_UNLOCK(&mutex)
+  return result;
+}
+
+bool Messenger::MessengerGetBuffered(pn_tracker_t tracker){
+  bool result;
+  NODE_CPROTON_MUTEX_LOCK(&mutex)
+  result = pn_messenger_buffered(messenger, tracker);
+  NODE_CPROTON_MUTEX_UNLOCK(&mutex)
+  return result;
+}
+
+pn_status_t Messenger::MessengerGetStatus(pn_tracker_t tracker){
+  pn_status_t result;
+  NODE_CPROTON_MUTEX_LOCK(&mutex)
+  result = pn_messenger_status(messenger, tracker);
+  NODE_CPROTON_MUTEX_UNLOCK(&mutex)
+  return result;
+}
+
+int Messenger::MessengerSettleOutgoing(pn_tracker_t tracker){
+  int result;
+  NODE_CPROTON_MUTEX_LOCK(&mutex)
+  result = pn_messenger_settle(messenger, tracker, 0);
+  NODE_CPROTON_MUTEX_UNLOCK(&mutex)
+  return result;
+}
+
+std::string Messenger::MapErrorToString(int err) {
+  switch(err) {
+    case MSG_ERROR_NONE:
+      return std::string("none");
+    case MSG_ERROR_INTERNAL:
+      return std::string("internal error");
+    case MSG_ERROR_REJECTED:
+      return std::string("rejected");
+    case MSG_ERROR_STATUS_UNKNOWN:
+      return std::string("status unknown");
+    case MSG_ERROR_ABORTED:
+      return std::string("aborted");
+  }
+  return std::string("unknown error");
+}
+
+int Messenger::MapPNStatusToError(pn_status_t status)
+{
+  switch(status) {
+    case PN_STATUS_UNKNOWN:
+      return MSG_ERROR_STATUS_UNKNOWN;
+    case PN_STATUS_PENDING:
+      return MSG_ERROR_NONE;
+    case PN_STATUS_ACCEPTED: 	
+      return MSG_ERROR_NONE;
+    case PN_STATUS_REJECTED:
+      return MSG_ERROR_REJECTED;
+    case PN_STATUS_RELEASED: 	
+      return MSG_ERROR_NONE;
+    case PN_STATUS_MODIFIED: 	
+      return MSG_ERROR_NONE;
+    case PN_STATUS_ABORTED: 	
+      return MSG_ERROR_ABORTED;
+    case PN_STATUS_SETTLED:
+      return MSG_ERROR_NONE;
+  }
+  return MSG_ERROR_INTERNAL;
+}

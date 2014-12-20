@@ -12,7 +12,7 @@
 
 #include <windows.h>
 
-    #define NODE_CPROTON_MUTEX_t(m) HANDLE m;
+    #define NODE_CPROTON_MUTEX_t HANDLE
 
     #define NODE_CPROTON_MUTEX_INIT(m) m = CreateMutex(NULL, FALSE, NULL);
 
@@ -26,7 +26,7 @@
 
 #include <pthread.h>
 
-    #define NODE_CPROTON_MUTEX_t(m) pthread_mutex_t m;
+    #define NODE_CPROTON_MUTEX_t pthread_mutex_t
 
     #define NODE_CPROTON_MUTEX_INIT(m) pthread_mutex_init(&m,NULL);
 

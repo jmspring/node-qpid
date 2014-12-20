@@ -3,7 +3,7 @@
     {
       "target_name": "cproton",
       "type": "loadable_module",
-      "sources": [ "src/cproton.cc", "src/messenger.cc", "src/protondata.cc" ],
+      "sources": [ "src/cproton.cc", "src/sending.cc", "src/messenger.cc", "src/protondata.cc" ],
   
       'conditions': [
         ['OS=="linux"', {
