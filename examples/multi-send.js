@@ -28,11 +28,11 @@ function message_callback(err, msg) {
     errors++;
   }
   resolved++;
+  endTime = new Date().getTime();
 }
 
 function status_check() {
   if(resolved == count) {
-    var endTime = new Date().getTime();
     console.log("Done: %d sent, %d errors, %d ms", resolved, errors, (endTime - startTime));
   } else {
     console.log("Sent: " + resolved + " of " + count);
@@ -41,9 +41,7 @@ function status_check() {
 }
 
 var i = 0;
-var batch = 500;    // number of messages to send in parallel
-
-try {
+var batch = 50;    // number of messages to send in parallel
 
 function send_batch() {
   var queue = [];
@@ -52,7 +50,7 @@ function send_batch() {
     queue.push(function(callback) {
       m.send(message, function(err, result) {
         message_callback(err, result);
-        callback(err);
+        callback(null);
       })
     });
   }
@@ -74,6 +72,3 @@ function send_batch() {
 
 setTimeout(status_check, 2500);
 send_batch();
-} catch(err) {
-  console.log("UMMM -- " + err);
-}
