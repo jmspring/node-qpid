@@ -193,14 +193,7 @@ void Messenger::MessageSettler::ProcessSettling(uv_timer_t *handle, int status) 
           processed = true;
         } else {
           if(status != PN_STATUS_PENDING) {
-            settler->msgr->MessengerSettleOutgoing(msg->tracker);
-            if((status == PN_STATUS_ABORTED) && !msg->retried) {
-              msg->retried = true;
-              abortedMessages.push_back(msg);
-              *it = msg = NULL;
-            } else {
-              msg->error = Messenger::MapPNStatusToError(status);
-            }
+            msg->error = Messenger::MapPNStatusToError(status);
             processed = true;
           }
           // exit out of the loop since we reached a message still buffered
