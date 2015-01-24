@@ -106,11 +106,13 @@ void Messenger::MessageSender::ProcessSending(uv_timer_t *handle, int status) {
   while(availableSlots) {
     InFlightMessage *msg = *it;
     if(msg) {
-      err = pn_messenger_put( messenger, msg->pnmsg );
+      //err = pn_messenger_put( messenger, msg->pnmsg );
+      sender->msgr->MessengerPut( msg->pnmsg );
       if(err) {
         msg->error = err;
       } else {
-        msg->tracker = pn_messenger_outgoing_tracker( messenger );
+        //msg->tracker = pn_messenger_outgoing_tracker( messenger );
+        msg->tracker = sender->msgr->MessengerGetOutgoingTracker();
       }
     }
     availableSlots--;
@@ -119,12 +121,13 @@ void Messenger::MessageSender::ProcessSending(uv_timer_t *handle, int status) {
 
   // messages sent?  
   if(it != sender->messageList.begin()) {
-    err = pn_messenger_send(messenger, -1);
+    //err = pn_messenger_send(messenger, -1);
+    err = sender->msgr->MessengerSend();
     if(err) {
       // TODO -- bubble this up
     }
   } else {
-    err = pn_messenger_work(messenger, 0);
+    err = sender->msgr->MessengerWork();
   }
     
   if(it != sender->messageList.begin()) {

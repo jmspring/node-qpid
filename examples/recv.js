@@ -22,4 +22,4 @@ m.on('message', function(message) {
   console.log(message.body);
 });
 
-m.subscribe(optimist.argv.address).receive();
+m.subscribe(optimist.argv.address, {}).receive();

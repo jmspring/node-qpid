@@ -448,12 +448,13 @@ pn_data_t *ProtonData::GetArrayOrListJSValue(pn_type_t type, Handle<Array> array
 {
   pn_data_t *rval = pn_data(0);
   pn_type_t arraytype = PN_NULL;
+  int length = array->Length() - 1;
   
   if(type == PN_LIST) {
     pn_data_put_list(rval);
   } else {
-    if(array->Length() > 0) {
-      pn_data_t *data = ParseJSData(array->Get(0));
+    if(length > 0) {
+      pn_data_t *data = ParseJSData(array->Get(1));
       if(data) {
         arraytype = pn_data_type(data);
         pn_data_free(data);      
@@ -494,16 +495,17 @@ pn_data_t *ProtonData::GetListJSValue(Handle<Array> array)
 pn_data_t *ProtonData::GetMapJSValue(Handle<Array> array)
 {
   pn_data_t *rval = NULL;
+  int length = array->Length() - 1;
   
-  if(array->Length() % 2 == 0) {
+  if((length % 2) == 0) {
     rval = pn_data(0);
     pn_data_put_map(rval);
     pn_data_enter(rval);
-    unsigned int nodecnt = array->Length() / 2;
+    unsigned int nodecnt = length / 2;
     for(unsigned int i = 0; i < nodecnt; i++) {
-      pn_data_t *key = ParseJSData(array->Get(i * 2));
+      pn_data_t *key = ParseJSData(array->Get(i * 2 + 1));
       if(key) {
-        pn_data_t *value = ParseJSData(array->Get(i * 2 + 1));
+        pn_data_t *value = ParseJSData(array->Get((i + 1) * 2));
         if(value) {
           pn_data_append(rval, key);
           pn_data_append(rval, value);
@@ -538,7 +540,7 @@ pn_data_t *ProtonData::ParseJSData(Handle<Value> jsval)
     } else if(type == PN_DESCRIBED) {
       rval = GetDescribedJSValue(array);
     } else {
-      Handle<Array> value = Handle<Array>::Cast(array->Get(1));
+      Handle<Array> value = Handle<Array>::Cast(jsval);
       if(type == PN_ARRAY) {
         rval = GetArrayJSValue(value);
       } else if(type == PN_LIST) {
@@ -550,6 +552,18 @@ pn_data_t *ProtonData::ParseJSData(Handle<Value> jsval)
         return NULL;
       }
     }
+  } else {
+    Local<Value> value = Local<Value>::New(jsval);
+    if(jsval->IsString()) {
+      rval = GetSimpleJSValue(PN_STRING, value);
+    } else if(jsval->IsBoolean()) {
+      rval = GetSimpleJSValue(PN_BOOL, value);
+    } else if(jsval->IsNull()) {
+      rval = GetSimpleJSValue(PN_NULL, value);
+    } else {
+      // TODO -- BINARY, others?
+    }
   }
+
   return rval;
 }

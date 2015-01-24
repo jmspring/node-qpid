@@ -63,34 +63,35 @@ class Messenger : public node::ObjectWrap {
 
   struct SubscribeBaton : Baton {
     int subscriptionIndex;
-    pn_data_t *filter_key;
     pn_data_t *filter_value;
 
-    SubscribeBaton(Messenger* msgr_, int subIndex, pn_data_t *key, pn_data_t *value, Handle<Function> cb_) :
+    SubscribeBaton(Messenger* msgr_, int subIndex, pn_data_t *value, Handle<Function> cb_) :
       Baton(msgr_, cb_),
       subscriptionIndex(subIndex),
-      filter_key(key),
       filter_value(value) {};
       
     ~SubscribeBaton() {
-      if(filter_key) {
-        pn_data_free(filter_key);
-      }
       if(filter_value) {
         pn_data_free(filter_value);
       }
-      filter_value = filter_key = NULL;
+      filter_value = NULL;
     }
   };
   
   struct AddSourceFilterBaton : Baton {
 
     std::string address;
-    pn_data_t *filter_key;
     pn_data_t *filter_value;
 
-    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, pn_data_t *filter_key_, pn_data_t *filter_value_) :
-      Baton(msgr_, cb_), address(address_), filter_key(filter_key_), filter_value(filter_value_) {}
+    AddSourceFilterBaton(Messenger* msgr_, Handle<Function> cb_, const char* address_, pn_data_t *filter_value_) :
+      Baton(msgr_, cb_), address(address_), filter_value(filter_value_) {}
+      
+    ~AddSourceFilterBaton() {
+      if(filter_value) {
+        pn_data_free(filter_value);
+      }
+      filter_value = NULL;
+    }
 
   };
 
@@ -161,7 +162,7 @@ class Messenger : public node::ObjectWrap {
   unsigned long AddSubscription(Subscription *sub);
   bool SetSubscriptionHandle(unsigned long idx, pn_subscription_t *sub);
   
-  void SetSourceFilter(std::string & address, pn_data_t *key, pn_data_t *value);
+  void SetSourceFilter(std::string & address, pn_data_t *value);
 
   // protected access methods
   int MessengerGetOutgoingWindow(void);
@@ -169,6 +170,12 @@ class Messenger : public node::ObjectWrap {
   bool MessengerGetBuffered(pn_tracker_t tracker);
   pn_status_t MessengerGetStatus(pn_tracker_t tracker);
   int MessengerSettleOutgoing(pn_tracker_t tracker);
+  int MessengerSend();
+  int MessengerWork();
+  pn_tracker_t MessengerGetOutgoingTracker(void);
+  int MessengerPut(pn_message_t *msg);
+  
+  
   
   // error stuff
   static int MapPNStatusToError(pn_status_t status);
